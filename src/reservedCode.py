@@ -5,6 +5,17 @@ import unicodedata
 import json
 import pandas as pd
 
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = Credentials.from_service_account_file("src/token/api-planilha-rodrigo.json", scopes=scope)
+client = gspread.authorize(creds)
+
+
+SHEET_NAME = "Comissão Time de Vendas TESTE"
+WORKSHEET_NAME = "Carlos Louback"
+sheet = client.open(SHEET_NAME).worksheet(WORKSHEET_NAME)
+
+existing_data = sheet.get_all_values()[7:]
+df_existing = pd.DataFrame(existing_data)
 
 def remove_acentos(input_str):
     if input_str is None:
@@ -12,13 +23,10 @@ def remove_acentos(input_str):
     nfkd_form = unicodedata.normalize('NFKD', input_str)
     return "".join([char for char in nfkd_form if not unicodedata.combining(char)])
 
-
 raw_data_path = 'src/raw_data/data.json'
-
 
 with open(raw_data_path, "r", encoding="utf-8") as file:
     sales_data = json.load(file)
-
 
 filtered_installments = []
 cell_formats = []  
@@ -47,12 +55,18 @@ for sale in sales_data:
         status_colors = [None] * 10
         font_colors =[None] * 10
 
+    #     if 'Venda' not in df_existing.columns:               # Corrigir aqui: raise KeyError("Coluna 'Venda' não encontrada")               # KeyError: "Coluna 'Venda' não encontrada"
+    #         raise KeyError("Coluna 'Venda' não encontrada")
+    #     df_existing["Venda"] = pd.to_numeric(df_existing["Venda"], errors="coerce")
+    # else:
+    #     colunas = ["Representante Comercial", "Cliente", "Venda", "Data", "Valor Total", "Forma de Pagamento"] + [f"Parcela {i+1}" for i in range(10)]
+    #     df_existing = pd.DataFrame(columns=colunas)
+
         for installment in installments:
             index = installment.get("number", 1) - 1  
             if index < 10:
                 parcel_values[index] = installment.get("value")
 
-                
                 status = installment.get("status", "").upper()
                 due_date_str = installment.get("due_date", "").split("T")[0]
 
@@ -64,15 +78,22 @@ for sale in sales_data:
 
                 
                 if status == "ACQUITTED":
-                    status_colors[index] = (0.0, 1.0, 0.0)  # Verde
+                    status_colors[index] = (0, 1, 0)  # Verde
                     font_colors[index] = (0, 0, 0)
                 elif is_late:
-                    status_colors[index] = (1, 0.0, 0.1)  # Vermelho
+                    status_colors[index] = (1, 0, 0.1) # Vermelho
+                    font_colors[index] = (1, 1, 1)
                 else:
                     status_colors[index] = (1, 1, 0.8)  # Amarelo
                     font_colors[index] = (0, 0, 0)
 
-    if number > 17799:
+
+# for row in filtered_installments:
+#     sale_number = row[2]
+#     existing_row_idx = df_existing.index[df_existing.get("Venda") == sale_number].tolist()
+
+    # if existing_row_idx:
+
         filtered_installments.append([
             seller.get("name"),
             customer.get("name"),
@@ -83,19 +104,11 @@ for sale in sales_data:
             *parcel_values
         ])
 
-        cell_formats.append(status_colors)
+        cell_formats.append((status_colors,font_colors))
 
 
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = Credentials.from_service_account_file("src/token/api-planilha-rodrigo.json", scopes=scope)
-client = gspread.authorize(creds)
 
-
-SHEET_NAME = "Comissão Time de Vendas TESTE"
-WORKSHEET_NAME = "Carlos Louback"
-sheet = client.open(SHEET_NAME).worksheet(WORKSHEET_NAME)
-
-ultima_linha = len(sheet.get_all_values()) + 1
+ultima_linha = len(df_existing) + 1
 if ultima_linha < 9:
     ultima_linha = 9
 
@@ -106,14 +119,16 @@ range_fim = range_inicio + num_linhas - 1
 intervalo = f"A{range_inicio}:P{range_fim}"  
 
 
-sheet.update(intervalo, filtered_installments)
+sheet.update(filtered_installments, intervalo)
 
 
 requests = []
-for i, colors in enumerate(cell_formats):
+for i, (colors,font_colors) in enumerate(cell_formats):
     row = range_inicio + i  
     for j, color in enumerate(colors):
-        if color:  
+        if color:
+            font_color = font_colors[j] if font_colors[j] else (0, 0, 0)
+
             requests.append({
                 "updateCells": {
                     "range": {
@@ -131,10 +146,17 @@ for i, colors in enumerate(cell_formats):
                                     "green": color[1],
                                     "blue": color[2]
                                 },
+                                "textFormat": {
+                                    "foregroundColor": {
+                                        "red": font_color[0],
+                                        "green": font_color[1],
+                                        "blue": font_color[2]
+                                    }
+                                }
                             }
                         }]
                     }],
-                    "fields": "userEnteredFormat.backgroundColor"
+                    "fields": "userEnteredFormat(backgroundColor,textFormat.foregroundColor)"
                 }
             })
 
@@ -144,3 +166,6 @@ if requests:
     sheet.spreadsheet.batch_update(body)
 
 print("Dados inseridos e cores aplicadas com sucesso!")
+
+# if __name__=='__main__':
+#     print(df_existing)

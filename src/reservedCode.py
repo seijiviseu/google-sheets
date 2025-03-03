@@ -85,14 +85,14 @@ for sale in sales_data:
                     is_late = False
                 
                 if status == "ACQUITTED":
-                    status_colors[index] = (0, 1, 0)  
-                    font_colors[index] = (0, 0, 0)
+                    status_colors[index] = (0.0, 1.0, 0.0)  
+                    font_colors[index] = (0.0, 0.0, 0.0)
                 elif is_late:
-                    status_colors[index] = (1, 0, 0.1)  
-                    font_colors[index] = (1, 1, 1)
+                    status_colors[index] = (1.0, 0.0, 0.1)  
+                    font_colors[index] = (1.0, 1.0, 1.0)
                 else:
-                    status_colors[index] = (1, 1, 0.8)  
-                    font_colors[index] = (0, 0, 0)
+                    status_colors[index] = (1.0, 1.0, 0.8)
+                    font_colors[index] = (0.0, 0.0, 0.0)
         
         
         existing_row_idx = df_existing.index[df_existing.get("Venda") == number].tolist()
@@ -100,7 +100,9 @@ for sale in sales_data:
         if existing_row_idx:
             
             row_index = existing_row_idx[0] + 9
-            
+        #     # break
+        
+        # else:
             
             filtered_installments.append([
                 seller.get("name"),
@@ -111,10 +113,6 @@ for sale in sales_data:
                 payment.get("method").replace("BANKING_BILLET", f"Boleto {num}x").replace("OTHER", "Cartão"),
                 *parcel_values
             ])
-            # update_data.append({
-            #     "range":f"A{row_index}:F{row_index}",
-            #     "values":[[update_data]]
-            #     })
             cell_formats.append((status_colors,font_colors))
 
 combined_data = list(zip(filtered_installments, cell_formats))
@@ -128,7 +126,7 @@ filtered_installments, cell_formats = zip(*combined_data)
 filtered_installments = list(filtered_installments)
 cell_formats = list(cell_formats)
 
-ultima_linha = len(df_existing) + 1
+ultima_linha = len(df_existing) + 9
 if ultima_linha < 9:
     ultima_linha = 9
 
@@ -144,68 +142,136 @@ row_index = existing_row_idx[0] + 9
 
 requests = []
 
-for i in range(10):
-    cell_value = parcel_values[i] if parcel_values[i] is not None else ""
-    cell_range = f"{chr(71 + i)}{row_index}"
+# for i in range(10):
+#     cell_value = parcel_values[i] if parcel_values[i] is not None else ""
+#     cell_range = f"{chr(71 + i)}{row_index}"
 
-    requests.append({
-        "range":cell_range,
-        "values":[[cell_value]]
-        })
+#     # requests.append({
+#     #     "range":cell_range,
+#     #     "values":[[cell_value]]
+#     #     })
+#     requests.append({
+#         "updateCells": {
+#             "range": {
+#                 "sheetId": sheet.id,
+#                 "startRowIndex": row_index - 1,
+#                 "endRowIndex": row_index,
+#                 "startColumnIndex": 6 + i,
+#                 "endColumnIndex": 7 + i
+#             },
+#             "rows": [
+#                 {
+#                     "values": [
+#                         {
+#                             "userEnteredValue": {"stringValue": str(cell_value)}
+#                         }
+#                     ]
+#                 }
+#             ],
+#             "fields": "userEnteredValue"
+#         }
+#     })
+
+#     if i < max_installment_num and status_colors[i]:
+#         requests.append({
+#             "repeatCell": {
+#                 "range": {
+#                     "sheetId": sheet.id,
+#                     "startRowIndex": row_index - 1,
+#                     "endRowIndex": row_index,
+#                     "startColumnIndex": 6 + i,
+#                     "endColumnIndex": 7 + i
+#                 },
+#                 "cell":{
+#                         "userEnteredFormat": {
+#                             "backgroundColor": {
+#                                 "red": status_colors[i][0],
+#                                 "green": status_colors[i][1],
+#                                 "blue": status_colors[i][2]
+#                             },
+#                             "textFormat": {
+#                                 "foregroundColor": {
+#                                     "red": font_colors[i][0],
+#                                     "green": font_colors[i][1],
+#                                     "blue": font_colors[i][2]
+#                                 }
+#                             }
+#                         }
+#                     },
+#                 "fields": "userEnteredFormat(backgroundColor,textFormat.foregroundColor)"
+#              }
+#         })
+
+#     elif i >= max_installment_num:
+#         requests.append({
+#             "repeatCell": {
+#                 "range": {
+#                     "sheetId": sheet.id,
+#                     "startRowIndex": row_index - 1,
+#                     "endRowIndex": row_index,
+#                     "startColumnIndex": 6 + i,
+#                     "endColumnIndex": 7 + i
+#                 },
+#                 "cell": {
+#                     "userEnteredFormat": {
+#                         "backgroundColor": {
+#                                         "red": status_colors[i][0],
+#                                         "green": status_colors[i][1],
+#                                         "blue": status_colors[i][2]
+#                                     },
+#                         "textFormat": {
+#                                         "foregroundColor": {
+#                                             "red": font_colors[i][0],
+#                                             "green": font_colors[i][1],
+#                                             "blue": font_colors[i][2]
+#                                         }
+#                                     }
+#                     }
+#                 },
+#                 "fields": "userEnteredFormat(backgroundColor,textFormat.foregroundColor)"
+#             }
+#         })
 
 for i in range(10):
-    if i < max_installment_num and status_colors[i]:
-        requests.append({
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet.id,
-                    "startRowIndex": row_index - 1,
-                    "endRowIndex": row_index,
-                    "startColumnIndex": 6 + i,
-                    "endColumnIndex": 7 + i
-                },
-                "rows": [{
-                    "values": [{
-                        "userEnteredFormat": {
-                            "backgroundColor": {
-                                "red": status_colors[i][0],
-                                "green": status_colors[i][1],
-                                "blue": status_colors[i][2]
-                            },
-                            "textFormat": {
-                                "foregroundColor": {
-                                    "red": font_colors[i][0],
-                                    "green": font_colors[i][1],
-                                    "blue": font_colors[i][2]
+    for row_offset, (colors, font_colors) in enumerate(cell_formats):
+        row = range_inicio + row_offset  # Define a linha correta
+
+        color = colors[i] if i < len(colors) else None
+        font_color = font_colors[i] if i < len(font_colors) else (0, 0, 0)
+
+        if color:
+            requests.append({
+                "updateCells": {
+                    "range": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": row - 1,
+                        "endRowIndex": row,
+                        "startColumnIndex": 6 + i,
+                        "endColumnIndex": 7 + i
+                    },
+                    "rows": [{
+                        "values": [{
+                            "userEnteredFormat": {
+                                "backgroundColor": {
+                                    "red": color[0],
+                                    "green": color[1],
+                                    "blue": color[2]
+                                },
+                                "textFormat": {
+                                    "foregroundColor": {
+                                        "red": font_color[0],
+                                        "green": font_color[1],
+                                        "blue": font_color[2]
+                                    }
                                 }
                             }
-                        }
-                    }]
-                }],
-                "fields": "userEnteredFormat(backgroundColor,textFormat.foregroundColor)"
-            }
-        })
-    elif i >= max_installment_num:
-        requests.append({
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet.id,
-                    "startRowIndex": row_index - 1,
-                    "endRowIndex": row_index,
-                    "startColumnIndex": 6 + i,
-                    "endColumnIndex": 7 + i
-                },
-                "rows": [{
-                    "values": [{
-                        "userEnteredFormat": {
-                            "backgroundColor": {"red": 0.5, "green": 0.5, "blue": 0.5},
-                            "textFormat": {"foregroundColor": {"red": 0, "green": 0, "blue": 0}}
-                        }
-                    }]
-                }],
-                "fields": "userEnteredFormat(backgroundColor,textFormat.foregroundColor)"
-            }
-        })
+                        }]
+                    }],
+                    "fields": "userEnteredFormat(backgroundColor,textFormat.foregroundColor)"
+                }
+            })
+
 print(json.dumps(requests, indent=2))
 if requests:
-    sheet.batch_update(requests) # O ERRO É ESSA FUNÇÃO!!!!!!!!!!!!!!!!
+    sheet.spreadsheet.batch_update({"requests": requests})  # Fixed batch_update call
+

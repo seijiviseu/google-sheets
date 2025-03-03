@@ -39,7 +39,9 @@ with open(raw_data_path, "r", encoding="utf-8") as file:
 filtered_installments = []
 cell_formats = []
 
-today = datetime.today().date()  
+today = datetime.today().date()
+
+df_existing = df_existing.drop_duplicates(subset=["Venda"], keep="last")
 
 for sale in sales_data:
     if "payment" in sale and "installments" in sale["payment"]:
@@ -47,7 +49,6 @@ for sale in sales_data:
         customer = sale.get("customer", {})
         seller = sale.get("seller", {})
         payment = sale.get("payment", {})
-        number = sale.get("number")
         emission = sale.get("emission", "").split("T")[0]
         installments = sale["payment"].get("installments", [])
         filter_data = datetime.strptime(emission, "%Y-%m-%d")
@@ -55,11 +56,14 @@ for sale in sales_data:
         metodo = payment.get("method")
         if metodo == "CASH":
             continue
+
+        if sale.get("seller", {}).get("name") == 'Financeiro':
+            continue
         
+        number = sale.get("number")
         
         num_installments = len(installments)
-        
-        
+
         max_installment_num = 0
         for installment in installments:
             num = installment.get("number", 1)
@@ -97,8 +101,7 @@ for sale in sales_data:
         
         existing_row_idx = df_existing.index[df_existing.get("Venda") == number].tolist()
         
-        if not existing_row_idx:
-            #row_index = existing_row_idx[0] + 9
+        if not existing_row_idx and filter_data.date().month == 2:
                 
             filtered_installments.append([
                 seller.get("name"),
@@ -111,19 +114,26 @@ for sale in sales_data:
             ])
             cell_formats.append((status_colors,font_colors))
 
-    combined_data = list(zip(filtered_installments, cell_formats))
+def parse_date(data):
+    try:
+        return datetime.strptime(data, "%d/%m/%Y").date()
+    except ValueError:
+        return datetime.min
+
+combined_data = list(zip(filtered_installments, cell_formats))
 
 combined_data.sort(key=lambda x: (
-    x[0][0] if x[0][0] else "",
-    x[0][3] if x[0][3] else ""
+    x[0][0].strip().lower() if x[0][0] else "",
+    parse_date(x[0][3])
 ))
 
-if not existing_data:
+if existing_data:
     filtered_installments, cell_formats = zip(*combined_data)
     filtered_installments = list(filtered_installments)
     cell_formats = list(cell_formats)
 else:
     pass
+
 
 ultima_linha = len(df_existing) + 9
 if ultima_linha < 9:
@@ -136,8 +146,6 @@ range_fim = range_inicio + num_linhas - 1
 intervalo = f"A{range_inicio}:P{range_fim}"
 
 sheet.update(filtered_installments, intervalo)
-
-#row_index = existing_row_idx[0] + 9
 
 requests = []
 
@@ -183,4 +191,3 @@ for i in range(10):
 print(json.dumps(requests, indent=2))
 if requests:
     sheet.spreadsheet.batch_update({"requests": requests})  # Fixed batch_update call
-

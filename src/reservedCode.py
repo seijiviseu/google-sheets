@@ -97,13 +97,9 @@ for sale in sales_data:
         
         existing_row_idx = df_existing.index[df_existing.get("Venda") == number].tolist()
         
-        if existing_row_idx:
-            
-            row_index = existing_row_idx[0] + 9
-        #     # break
-        
-        # else:
-            
+        if not existing_row_idx:
+            #row_index = existing_row_idx[0] + 9
+                
             filtered_installments.append([
                 seller.get("name"),
                 customer.get("name"),
@@ -115,16 +111,19 @@ for sale in sales_data:
             ])
             cell_formats.append((status_colors,font_colors))
 
-combined_data = list(zip(filtered_installments, cell_formats))
+    combined_data = list(zip(filtered_installments, cell_formats))
 
 combined_data.sort(key=lambda x: (
     x[0][0] if x[0][0] else "",
     x[0][3] if x[0][3] else ""
 ))
 
-filtered_installments, cell_formats = zip(*combined_data)
-filtered_installments = list(filtered_installments)
-cell_formats = list(cell_formats)
+if not existing_data:
+    filtered_installments, cell_formats = zip(*combined_data)
+    filtered_installments = list(filtered_installments)
+    cell_formats = list(cell_formats)
+else:
+    pass
 
 ultima_linha = len(df_existing) + 9
 if ultima_linha < 9:
@@ -138,99 +137,9 @@ intervalo = f"A{range_inicio}:P{range_fim}"
 
 sheet.update(filtered_installments, intervalo)
 
-row_index = existing_row_idx[0] + 9
+#row_index = existing_row_idx[0] + 9
 
 requests = []
-
-# for i in range(10):
-#     cell_value = parcel_values[i] if parcel_values[i] is not None else ""
-#     cell_range = f"{chr(71 + i)}{row_index}"
-
-#     # requests.append({
-#     #     "range":cell_range,
-#     #     "values":[[cell_value]]
-#     #     })
-#     requests.append({
-#         "updateCells": {
-#             "range": {
-#                 "sheetId": sheet.id,
-#                 "startRowIndex": row_index - 1,
-#                 "endRowIndex": row_index,
-#                 "startColumnIndex": 6 + i,
-#                 "endColumnIndex": 7 + i
-#             },
-#             "rows": [
-#                 {
-#                     "values": [
-#                         {
-#                             "userEnteredValue": {"stringValue": str(cell_value)}
-#                         }
-#                     ]
-#                 }
-#             ],
-#             "fields": "userEnteredValue"
-#         }
-#     })
-
-#     if i < max_installment_num and status_colors[i]:
-#         requests.append({
-#             "repeatCell": {
-#                 "range": {
-#                     "sheetId": sheet.id,
-#                     "startRowIndex": row_index - 1,
-#                     "endRowIndex": row_index,
-#                     "startColumnIndex": 6 + i,
-#                     "endColumnIndex": 7 + i
-#                 },
-#                 "cell":{
-#                         "userEnteredFormat": {
-#                             "backgroundColor": {
-#                                 "red": status_colors[i][0],
-#                                 "green": status_colors[i][1],
-#                                 "blue": status_colors[i][2]
-#                             },
-#                             "textFormat": {
-#                                 "foregroundColor": {
-#                                     "red": font_colors[i][0],
-#                                     "green": font_colors[i][1],
-#                                     "blue": font_colors[i][2]
-#                                 }
-#                             }
-#                         }
-#                     },
-#                 "fields": "userEnteredFormat(backgroundColor,textFormat.foregroundColor)"
-#              }
-#         })
-
-#     elif i >= max_installment_num:
-#         requests.append({
-#             "repeatCell": {
-#                 "range": {
-#                     "sheetId": sheet.id,
-#                     "startRowIndex": row_index - 1,
-#                     "endRowIndex": row_index,
-#                     "startColumnIndex": 6 + i,
-#                     "endColumnIndex": 7 + i
-#                 },
-#                 "cell": {
-#                     "userEnteredFormat": {
-#                         "backgroundColor": {
-#                                         "red": status_colors[i][0],
-#                                         "green": status_colors[i][1],
-#                                         "blue": status_colors[i][2]
-#                                     },
-#                         "textFormat": {
-#                                         "foregroundColor": {
-#                                             "red": font_colors[i][0],
-#                                             "green": font_colors[i][1],
-#                                             "blue": font_colors[i][2]
-#                                         }
-#                                     }
-#                     }
-#                 },
-#                 "fields": "userEnteredFormat(backgroundColor,textFormat.foregroundColor)"
-#             }
-#         })
 
 for i in range(10):
     for row_offset, (colors, font_colors) in enumerate(cell_formats):

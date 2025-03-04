@@ -4,6 +4,7 @@ from datetime import datetime
 import unicodedata
 import json
 import pandas as pd
+import time
 
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = Credentials.from_service_account_file("src/token/api-planilha-rodrigo.json", scopes=scope)
@@ -36,9 +37,11 @@ with open(raw_data_path, "r", encoding="utf-8") as file:
     sales_data = json.load(file)
 
 filtered_installments = []
-cell_formats = []  
+cell_formats = []
 
-today = datetime.today().date()  
+today = datetime.today().date()
+
+df_existing = df_existing.drop_duplicates(subset=["Venda"], keep="last")
 
 for sale in sales_data:
     if "payment" in sale and "installments" in sale["payment"]:
@@ -46,7 +49,6 @@ for sale in sales_data:
         customer = sale.get("customer", {})
         seller = sale.get("seller", {})
         payment = sale.get("payment", {})
-        number = sale.get("number")
         emission = sale.get("emission", "").split("T")[0]
         installments = sale["payment"].get("installments", [])
         filter_data = datetime.strptime(emission, "%Y-%m-%d")
@@ -54,43 +56,53 @@ for sale in sales_data:
         metodo = payment.get("method")
         if metodo == "CASH":
             continue
-        for installment in installments:
-            num = installment.get("number")
 
+        if sale.get("seller", {}).get("name") == 'Financeiro':
+            continue
+        
+        number = sale.get("number")
+        
+        num_installments = len(installments)
+
+        max_installment_num = 0
+        for installment in installments:
+            num = installment.get("number", 1)
+            max_installment_num = max(max_installment_num, num)
         
         parcel_values = [None] * 10
         status_colors = [None] * 10
-        font_colors =[None] * 10
-
-
+        font_colors = [None] * 10
+        
+        
         for installment in installments:
-            index = installment.get("number", 1) - 1  
+            index = installment.get("number", 1) - 1
             if index < 10:
                 parcel_values[index] = installment.get("value")
-
+                
                 status = installment.get("status", "").upper()
                 due_date_str = installment.get("due_date", "").split("T")[0]
-
+                
                 if due_date_str:
                     due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
                     is_late = due_date < today and status == "PENDING"
                 else:
                     is_late = False
-
                 
                 if status == "ACQUITTED":
-                    status_colors[index] = (0, 1, 0)  # Verde
-                    font_colors[index] = (0, 0, 0)
+                    status_colors[index] = (0.0, 1.0, 0.0)  
+                    font_colors[index] = (0.0, 0.0, 0.0)
                 elif is_late:
-                    status_colors[index] = (1, 0, 0.1) # Vermelho
-                    font_colors[index] = (1, 1, 1)
+                    status_colors[index] = (1.0, 0.0, 0.1)  
+                    font_colors[index] = (1.0, 1.0, 1.0)
                 else:
-                    status_colors[index] = (1, 1, 0.8)  # Amarelo
-                    font_colors[index] = (0, 0, 0)
-
+                    status_colors[index] = (1.0, 1.0, 0.8)
+                    font_colors[index] = (0.0, 0.0, 0.0)
+        
+        
         existing_row_idx = df_existing.index[df_existing.get("Venda") == number].tolist()
-
-        if not existing_row_idx:
+        
+        if not existing_row_idx and filter_data.date().month == 2:
+                
             filtered_installments.append([
                 seller.get("name"),
                 customer.get("name"),
@@ -100,23 +112,30 @@ for sale in sales_data:
                 payment.get("method").replace("BANKING_BILLET", f"Boleto {num}x").replace("OTHER", "Cartão"),
                 *parcel_values
             ])
-
             cell_formats.append((status_colors,font_colors))
+
+def parse_date(data):
+    try:
+        return datetime.strptime(data, "%d/%m/%Y").date()
+    except ValueError:
+        return datetime.min
 
 combined_data = list(zip(filtered_installments, cell_formats))
 
-# Sort by seller name
 combined_data.sort(key=lambda x: (
-    x[0][0] if x[0][0] else "",  # Primary sort by seller name
-    x[0][3] if x[0][3] else ""   # Secondary sort by date
+    x[0][0].strip().lower() if x[0][0] else "",
+    parse_date(x[0][3])
 ))
 
-# Unpack the sorted data
-filtered_installments, cell_formats = zip(*combined_data)
-filtered_installments = list(filtered_installments)  # Convert back to list if needed
-cell_formats = list(cell_formats)  # Convert back to list
+if existing_data:
+    filtered_installments, cell_formats = zip(*combined_data)
+    filtered_installments = list(filtered_installments)
+    cell_formats = list(cell_formats)
+else:
+    pass
 
-ultima_linha = len(df_existing) + 1
+
+ultima_linha = len(df_existing) + 9
 if ultima_linha < 9:
     ultima_linha = 9
 
@@ -129,20 +148,23 @@ intervalo = f"A{range_inicio}:P{range_fim}"
 sheet.update(filtered_installments, intervalo)
 
 requests = []
-for i, (colors,font_colors) in enumerate(cell_formats):
-    row = range_inicio + i
-    for j, color in enumerate(colors):
-        if color:
-            font_color = font_colors[j] if font_colors[j] else (0, 0, 0)
 
+for i in range(10):
+    for row_offset, (colors, font_colors) in enumerate(cell_formats):
+        row = range_inicio + row_offset  # Define a linha correta
+
+        color = colors[i] if i < len(colors) else None
+        font_color = font_colors[i] if i < len(font_colors) else (0, 0, 0)
+
+        if color:
             requests.append({
                 "updateCells": {
                     "range": {
                         "sheetId": sheet.id,
                         "startRowIndex": row - 1,
                         "endRowIndex": row,
-                        "startColumnIndex": 6 + j,
-                        "endColumnIndex": 7 + j
+                        "startColumnIndex": 6 + i,
+                        "endColumnIndex": 7 + i
                     },
                     "rows": [{
                         "values": [{
@@ -166,12 +188,6 @@ for i, (colors,font_colors) in enumerate(cell_formats):
                 }
             })
 
-
+print(json.dumps(requests, indent=2))
 if requests:
-    body = {"requests": requests}
-    sheet.spreadsheet.batch_update(body)
-
-print("Dados inseridos e cores aplicadas com sucesso!")
-
-# if __name__=='__main__':
-#     print(existing_range_filled)
+    sheet.spreadsheet.batch_update({"requests": requests})  # Fixed batch_update call

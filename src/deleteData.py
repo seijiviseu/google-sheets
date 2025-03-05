@@ -1,40 +1,64 @@
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
-import unicodedata
-import json
 import pandas as pd
-import time
-
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = Credentials.from_service_account_file("src/token/api-planilha-rodrigo.json", scopes=scope)
-client = gspread.authorize(creds)
 
 
-SHEET_NAME = "Comissão Time de Vendas TESTE"
-WORKSHEET_NAME = "Carlos Louback"
-sheet = client.open(SHEET_NAME).worksheet(WORKSHEET_NAME)
+def setup_google_sheets(sheet_name, worksheet_name):
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_file("src/common/config/api-planilha-rodrigo.json", scopes=scope)
+    client = gspread.authorize(creds)
+    return client.open(sheet_name).worksheet(worksheet_name)
 
-existing_data = sheet.get_all_values()[7:]
-if existing_data:
+
+def load_data(sheet, csv_file):
+    existing_data = sheet.get_all_values()[7:]
+    if not existing_data:
+        print("A planilha está vazia.")
+        return None, None
+
     df_existing = pd.DataFrame(existing_data[1:], columns=existing_data[0])
-else:
-    colunas = ["Representante Comercial", "Cliente", "Venda", "Data", "Valor Total", "Forma de Pagamento"] + [f"Parcela {i+1}" for i in range(10)]
-    df_existing = pd.DataFrame(columns=colunas)
+    if "Venda" in df_existing.columns:
+        df_existing["Venda"] = pd.to_numeric(df_existing["Venda"], errors="coerce")
 
-if "Venda" in df_existing.columns:
-    df_existing["Venda"] = pd.to_numeric(df_existing["Venda"], errors="coerce")
+    df_delete = pd.read_csv(csv_file)
+    if "Venda" in df_delete.columns:
+        df_delete["Venda"] = pd.to_numeric(df_delete["Venda"], errors="coerce")
 
-raw_data_path = 'src/raw_data/delete_data.csv'
-df_delete = pd.read_csv(raw_data_path)
+    return df_existing, df_delete
 
-if "Venda" in df_delete.columns:
-    df_delete["Venda"] = pd.to_numeric(df_delete["Venda"], errors="coerce")
 
-# 🔹 Identificar as linhas a serem deletadas
-for venda in df_delete["Venda"]:
-    index_list = df_existing[df_existing["Venda"] == venda].index.tolist()
+def delete_rows(sheet, df_existing, df_delete):
+    deleted_count = 0
+    for venda in df_delete["Venda"]:
+        index_list = df_existing[df_existing["Venda"] == venda].index.tolist()
+        
+        for idx in sorted(index_list, reverse=True):
+            row_to_delete = idx + 9
+            sheet.delete_rows(row_to_delete)
+            deleted_count += 1
+            print(f"Deletada a venda {venda} na linha {row_to_delete}")
+    
+    return deleted_count
 
-    # Deletar cada linha encontrada
-    for idx in sorted(index_list, reverse=True):  # Ordena para deletar de baixo para cima
-        sheet.delete_rows(idx + 9) # Deletando a venda 17793
+
+def main_delete(sheet_name="Comissão Time de Vendas TESTE",
+                worksheet_name="Carlos Louback",
+                csv_file="src/common/input_files/delete_data.csv"):
+    
+    sheet = setup_google_sheets(sheet_name, worksheet_name)
+    
+    df_existing, df_delete = load_data(sheet, csv_file)
+    if df_existing is None or df_delete is None:
+        return
+    
+    deleted_count = delete_rows(sheet, df_existing, df_delete)
+    
+    if deleted_count > 0:
+        print(f"\nTotal de {deleted_count} linha(s) deletada(s) com sucesso!")
+    else:
+        print("\nNenhuma linha encontrada para deletar.")
+
+
+if __name__ == "__main__":
+    main_delete()
